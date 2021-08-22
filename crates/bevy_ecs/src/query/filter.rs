@@ -11,6 +11,32 @@ use std::{cell::UnsafeCell, marker::PhantomData, ptr};
 
 /// Extension trait for [`Fetch`] containing methods used by query filters.
 /// This trait exists to allow "short circuit" behaviors for relevant query filter fetches.
+///
+/// ## Derive
+///
+/// This trait can be derived with the [`derive@super::FilterFetch`] macro.
+/// To do so, all fields in the struct must be filters themselves (their [`WorldQuery::Fetch`]
+/// associated types should implement [`FilterFetch`]).
+///
+/// ```
+/// # use bevy_ecs::prelude::*;
+/// use bevy_ecs::{query::FilterFetch, component::Component};
+///
+/// #[derive(FilterFetch)]
+/// struct MyFilter<T: Component, P: Component> {
+///     _u_16: With<u16>,
+///     _u_32: With<u32>,
+///     _or: Or<(With<i16>, Changed<u16>, Added<u32>)>,
+///     _generic_tuple: (With<T>, Without<P>),
+///     _tp: std::marker::PhantomData<(T, P)>,
+/// }
+///
+/// fn my_system(query: Query<Entity, MyFilter<u16, i16>>) {
+///     for _ in query.iter() {}
+/// }
+///
+/// # my_system.system();
+/// ```
 pub trait FilterFetch: for<'w, 's> Fetch<'w, 's> {
     /// # Safety
     ///

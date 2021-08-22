@@ -8,6 +8,7 @@ use crate::{
     world::{Mut, World},
 };
 use bevy_ecs_macros::all_tuples;
+pub use bevy_ecs_macros::{Fetch, FilterFetch};
 use std::{
     cell::UnsafeCell,
     marker::PhantomData,
@@ -45,6 +46,95 @@ pub trait WorldQuery {
     type State: FetchState;
 }
 
+/// # Derive
+///
+/// This trait can be derived with the [`derive@super::Fetch`] macro.
+/// To do so, all fields in the struct must themselves impl [`WorldQuery`].
+///
+/// ```
+/// # use bevy_ecs::prelude::*;
+/// use bevy_ecs::query::Fetch;
+///
+/// #[derive(Fetch)]
+/// struct MyQuery<'w> {
+///     foo: &'w u32,
+///     bar: Mut<'w, i32>,
+/// }
+///
+/// fn my_system(mut query: Query<MyQuery>) {
+///     for q in query.iter_mut() {
+///         q.foo;
+///     }
+/// }
+///
+/// # my_system.system();
+/// ```
+///
+/// ## Usage with filters
+///
+/// All filter members must be marked with `filter` attribute and have `bool` type.
+///
+/// ```
+/// # use bevy_ecs::prelude::*;
+/// use bevy_ecs::query::Fetch;
+///
+/// #[derive(Fetch)]
+/// struct MyQuery<'w> {
+///     foo: &'w u32,
+///     bar: Mut<'w, i32>,
+///     #[filter(Changed<u32>)]
+///     foo_is_changed: bool,
+/// }
+/// ```
+///
+/// ## Read-only queries
+///
+/// All queries that access components non-mutably are read-only by default, with the exception
+/// of nested custom queries (containing members that implement [`Fetch`] with the derive macro).
+/// In order to compile a nested query as a read-only one, such members must be marked with
+/// the `readonly` attribute.
+///
+/// ```
+/// # use bevy_ecs::prelude::*;
+/// use bevy_ecs::query::{Fetch, ReadOnlyFetch, WorldQuery};
+///
+/// #[derive(Fetch)]
+/// struct FooQuery<'w> {
+///     foo: &'w u32,
+///     #[readonly]
+///     bar_query: BarQuery<'w>,
+/// }
+///
+/// #[derive(Fetch)]
+/// struct BarQuery<'w> {
+///     bar: &'w u32,
+/// }
+///
+/// fn assert_readonly<T: ReadOnlyFetch>() {}
+///
+/// assert_readonly::<<FooQuery as WorldQuery>::Fetch>();
+/// ```
+///
+/// **Note** that if you mark a field that doesn't implement `ReadOnlyFetch` as `readonly`, the
+/// compilation will fail. We insert static checks as in the example above for every nested query
+/// marked as `readonly`. (They neither affect the runtime, nor pollute your local namespace.)
+///
+/// ```compile_fail
+/// # use bevy_ecs::prelude::*;
+/// use bevy_ecs::query::{Fetch, ReadOnlyFetch, WorldQuery};
+///
+/// #[derive(Fetch)]
+/// struct FooQuery<'w> {
+///     foo: &'w u32,
+///     #[readonly]
+///     bar_query: BarQuery<'w>,
+/// }
+///
+/// #[derive(Fetch)]
+/// struct BarQuery<'w> {
+///     bar: Mut<'w, u32>,
+/// }
+/// ```
 pub trait Fetch<'world, 'state>: Sized {
     type Item;
     type State: FetchState;
