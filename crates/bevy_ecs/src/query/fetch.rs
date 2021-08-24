@@ -22,6 +22,10 @@ use std::{
 ///
 /// See [`Query`](crate::system::Query) for a primer on queries.
 ///
+/// If you want to implement a custom query, see [`Fetch`] trait documentation.
+///
+/// If you want to implement a custom query filter, see [`FilterFetch`] trait documentation.
+///
 /// # Basic WorldQueries
 ///
 /// Here is a small list of the most important world queries to know about where `C` stands for a
@@ -46,19 +50,48 @@ pub trait WorldQuery {
     type State: FetchState;
 }
 
+/// Types that implement this trait are responsible for fetching query items from tables or
+/// archetypes.
+///
+/// Every type that implements [`WorldQuery`] have their associated [`WorldQuery::Fetch`] and
+/// [`WorldQuery::State`] types that are essential for fetching component data. If you want to
+/// implement a custom query type, you'll need to implement [`Fetch`] and [`FetchState`] for
+/// those associated types.
+///
+/// You may want to implement a custom query for the following reasons:
+/// - Named structs can be easier to use than complex query tuples. Access via struct fields
+///   is more convenient than destructuring tuples or accessing them via `q.0, q.1, ...` pattern
+///   and saves a lot of maintenance burden when adding or removing components.
+/// - Nested queries enable the composition pattern and makes query types easier to re-use.
+/// - It allows to go over the limit of 15 components that exists for query tuples.
+///
 /// # Derive
 ///
 /// This trait can be derived with the [`derive@super::Fetch`] macro.
 /// To do so, all fields in the struct must themselves impl [`WorldQuery`].
 ///
+/// The derive macro implements [`WorldQuery`] for your type and declares two structs that
+/// implement [`Fetch`] and [`FetchState`] and are used as [`WorldQuery::Fetch`] and
+/// [`WorldQuery::State`] associated types respectively.
+///
+/// **Note:** currently, the macro only supports named structs.
+///
 /// ```
 /// # use bevy_ecs::prelude::*;
 /// use bevy_ecs::query::Fetch;
 ///
+/// struct Foo;
+/// struct Bar;
+/// struct OptionalFoo;
+/// struct OptionalBar;
+///
 /// #[derive(Fetch)]
 /// struct MyQuery<'w> {
-///     foo: &'w u32,
-///     bar: Mut<'w, i32>,
+///     entity: Entity,
+///     foo: &'w Foo,
+///     bar: Mut<'w, Bar>,
+///     optional_foo: Option<&'w OptionalFoo>,
+///     optional_bar: Option<Mut<'w, OptionalBar>>,
 /// }
 ///
 /// fn my_system(mut query: Query<MyQuery>) {
@@ -74,17 +107,53 @@ pub trait WorldQuery {
 ///
 /// All filter members must be marked with `filter` attribute and have `bool` type.
 ///
+/// **Note:** values of filter members will always be `true`, which means that the entities that
+/// don't meet filter requirements, won't be accessed. If you want to check, for instance, whether
+/// a component exists or not, use `Option<&T>` instead of filters.
+///
 /// ```
 /// # use bevy_ecs::prelude::*;
 /// use bevy_ecs::query::Fetch;
 ///
+/// struct Foo;
+/// struct Bar;
+///
 /// #[derive(Fetch)]
 /// struct MyQuery<'w> {
-///     foo: &'w u32,
-///     bar: Mut<'w, i32>,
-///     #[filter(Changed<u32>)]
+///     foo: &'w Foo,
+///     bar: Mut<'w, Bar>,
+///     #[filter(Changed<Foo>)]
 ///     foo_is_changed: bool,
 /// }
+/// ```
+///
+/// ## Nested queries
+///
+/// Using nested queries enable the composition pattern, which makes it possible to re-use other
+/// query types. All types that implement [`WorldQuery`] (including the ones that use this derive
+/// macro) are supported.
+///
+/// ```
+/// # use bevy_ecs::prelude::*;
+/// use bevy_ecs::query::Fetch;
+///
+/// struct Foo;
+/// struct Bar;
+/// struct OptionalFoo;
+/// struct OptionalBar;
+///
+/// #[derive(Fetch)]
+/// struct MyQuery<'w> {
+///     foo: FooQuery<'w>,
+///     bar: (&'w Bar, Option<&'w OptionalBar>)
+/// }
+///
+/// #[derive(Fetch)]
+/// struct FooQuery<'w> {
+///     foo: &'w Foo,
+///     optional_foo: Option<&'w OptionalFoo>,
+/// }
+///
 /// ```
 ///
 /// ## Read-only queries
@@ -98,16 +167,19 @@ pub trait WorldQuery {
 /// # use bevy_ecs::prelude::*;
 /// use bevy_ecs::query::{Fetch, ReadOnlyFetch, WorldQuery};
 ///
+/// struct Foo;
+/// struct Bar;
+///
 /// #[derive(Fetch)]
 /// struct FooQuery<'w> {
-///     foo: &'w u32,
+///     foo: &'w Foo,
 ///     #[readonly]
 ///     bar_query: BarQuery<'w>,
 /// }
 ///
 /// #[derive(Fetch)]
 /// struct BarQuery<'w> {
-///     bar: &'w u32,
+///     bar: &'w Bar,
 /// }
 ///
 /// fn assert_readonly<T: ReadOnlyFetch>() {}
@@ -115,7 +187,7 @@ pub trait WorldQuery {
 /// assert_readonly::<<FooQuery as WorldQuery>::Fetch>();
 /// ```
 ///
-/// **Note** that if you mark a field that doesn't implement `ReadOnlyFetch` as `readonly`, the
+/// **Note:** if you mark a field that doesn't implement `ReadOnlyFetch` as `readonly`,
 /// compilation will fail. We insert static checks as in the example above for every nested query
 /// marked as `readonly`. (They neither affect the runtime, nor pollute your local namespace.)
 ///
@@ -123,16 +195,19 @@ pub trait WorldQuery {
 /// # use bevy_ecs::prelude::*;
 /// use bevy_ecs::query::{Fetch, ReadOnlyFetch, WorldQuery};
 ///
+/// struct Foo;
+/// struct Bar;
+///
 /// #[derive(Fetch)]
 /// struct FooQuery<'w> {
-///     foo: &'w u32,
+///     foo: &'w Foo,
 ///     #[readonly]
 ///     bar_query: BarQuery<'w>,
 /// }
 ///
 /// #[derive(Fetch)]
 /// struct BarQuery<'w> {
-///     bar: Mut<'w, u32>,
+///     bar: Mut<'w, Bar>,
 /// }
 /// ```
 pub trait Fetch<'world, 'state>: Sized {

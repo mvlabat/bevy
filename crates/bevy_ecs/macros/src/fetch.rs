@@ -23,9 +23,9 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
         impl_generics,
         ty_generics,
         where_clause,
-        struct_has_world_lt,
-        world_lt,
-        state_lt,
+        struct_has_world_lifetime,
+        world_lifetime,
+        state_lifetime,
     } = fetch_impl_tokens(&ast);
 
     // Fetch's HRTBs require this hack to make the implementation compile. I don't fully understand
@@ -34,9 +34,9 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
     // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=da5e260a5c2f3e774142d60a199e854a (this fails)
     // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=802517bb3d8f83c45ee8c0be360bb250 (this compiles)
     let mut fetch_generics = ast.generics.clone();
-    fetch_generics.params.insert(0, state_lt);
-    if !struct_has_world_lt {
-        fetch_generics.params.insert(0, world_lt);
+    fetch_generics.params.insert(0, state_lifetime);
+    if !struct_has_world_lifetime {
+        fetch_generics.params.insert(0, world_lifetime);
     }
     fetch_generics
         .params
@@ -46,7 +46,7 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
         ))));
     let (fetch_impl_generics, _, _) = fetch_generics.split_for_impl();
     let mut fetch_generics = ast.generics.clone();
-    if struct_has_world_lt {
+    if struct_has_world_lifetime {
         *fetch_generics.params.first_mut().unwrap() =
             GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'fetch", Span::call_site())));
     }
@@ -142,9 +142,9 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
             /// SAFETY: each item in the struct is read only
             unsafe impl #impl_generics #path::query::ReadOnlyFetch for #fetch_struct_name #ty_generics #where_clause {}
 
-            // Statically checks that the safety guarantee holds true indeed. We need this to make
-            // sure that we don't compile ReadOnlyFetch if our struct contains nested WorldQuery
-            // that don't implement it.
+            // Statically checks that the safety guarantee actually holds true. We need this to make
+            // sure that we don't compile `ReadOnlyFetch` if our struct contains nested `WorldQuery`
+            // members that don't implement it.
             #[allow(dead_code)]
             const _: () = {
                 fn assert_readonly<T: #path::query::ReadOnlyFetch>() {}
@@ -183,16 +183,20 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
                 true #(&& self.#field_idents.is_dense())*
             }
 
+            /// SAFETY: we call `set_archetype` for each member that implements `Fetch`
             #[inline]
             unsafe fn set_archetype(&mut self, _state: &Self::State, _archetype: &#path::archetype::Archetype, _tables: &#path::storage::Tables) {
                 #(self.#field_idents.set_archetype(&_state.#field_idents, _archetype, _tables);)*
             }
 
+            /// SAFETY: we call `set_table` for each member that implements `Fetch`
             #[inline]
             unsafe fn set_table(&mut self, _state: &Self::State, _table: &#path::storage::Table) {
                 #(self.#field_idents.set_table(&_state.#field_idents, _table);)*
             }
 
+            /// SAFETY: we call `table_fetch` for each member that implements `Fetch` or
+            /// `table_filter_fetch` if it also implements `FilterFetch`.
             #[inline]
             unsafe fn table_fetch(&mut self, _table_row: usize) -> Self::Item {
                 use #path::query::FilterFetch;
@@ -203,6 +207,8 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
                 }
             }
 
+            /// SAFETY: we call `archetype_fetch` for each member that implements `Fetch` or
+            /// `archetype_filter_fetch` if it also implements `FilterFetch`.
             #[inline]
             unsafe fn archetype_fetch(&mut self, _archetype_index: usize) -> Self::Item {
                 use #path::query::FilterFetch;
@@ -214,7 +220,7 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
             }
         }
 
-        // SAFETY: update_component_access and update_archetype_component_access are called for each item in the struct
+        // SAFETY: `update_component_access` and `update_archetype_component_access` are called for each item in the struct
         unsafe impl #impl_generics #path::query::FetchState for #state_struct_name #ty_generics #where_clause {
             fn init(world: &mut #path::world::World) -> Self {
                 #state_struct_name {
@@ -260,9 +266,9 @@ pub fn derive_filter_fetch_impl(input: TokenStream) -> TokenStream {
         impl_generics,
         ty_generics,
         where_clause,
-        struct_has_world_lt,
-        world_lt,
-        state_lt,
+        struct_has_world_lifetime,
+        world_lifetime,
+        state_lifetime,
     } = fetch_impl_tokens(&ast);
 
     // Fetch's HRTBs require this hack to make the implementation compile. I don't fully understand
@@ -271,9 +277,9 @@ pub fn derive_filter_fetch_impl(input: TokenStream) -> TokenStream {
     // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=da5e260a5c2f3e774142d60a199e854a (this fails)
     // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=802517bb3d8f83c45ee8c0be360bb250 (this compiles)
     let mut fetch_generics = ast.generics.clone();
-    fetch_generics.params.insert(0, state_lt);
-    if !struct_has_world_lt {
-        fetch_generics.params.insert(0, world_lt);
+    fetch_generics.params.insert(0, state_lifetime);
+    if !struct_has_world_lifetime {
+        fetch_generics.params.insert(0, world_lifetime);
     }
     fetch_generics
         .params
@@ -283,7 +289,7 @@ pub fn derive_filter_fetch_impl(input: TokenStream) -> TokenStream {
         ))));
     let (fetch_impl_generics, _, _) = fetch_generics.split_for_impl();
     let mut fetch_generics = ast.generics.clone();
-    if struct_has_world_lt {
+    if struct_has_world_lifetime {
         *fetch_generics.params.first_mut().unwrap() =
             GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'fetch", Span::call_site())));
     }
@@ -410,6 +416,7 @@ pub fn derive_filter_fetch_impl(input: TokenStream) -> TokenStream {
     tokens
 }
 
+// This struct is used to share common tokens between `Fetch` and `FilterFetch` implementations.
 struct FetchImplTokens<'a> {
     struct_name: Ident,
     fetch_struct_name: Ident,
@@ -418,26 +425,26 @@ struct FetchImplTokens<'a> {
     impl_generics: ImplGenerics<'a>,
     ty_generics: TypeGenerics<'a>,
     where_clause: Option<&'a WhereClause>,
-    struct_has_world_lt: bool,
-    world_lt: GenericParam,
-    state_lt: GenericParam,
+    struct_has_world_lifetime: bool,
+    world_lifetime: GenericParam,
+    state_lifetime: GenericParam,
 }
 
 fn fetch_impl_tokens(ast: &DeriveInput) -> FetchImplTokens {
-    let world_lt = ast.generics.params.first().and_then(|param| match param {
+    let world_lifetime = ast.generics.params.first().and_then(|param| match param {
         lt @ GenericParam::Lifetime(_) => Some(lt.clone()),
         _ => None,
     });
-    let struct_has_world_lt = world_lt.is_some();
-    let world_lt = world_lt.unwrap_or_else(|| {
+    let struct_has_world_lifetime = world_lifetime.is_some();
+    let world_lifetime = world_lifetime.unwrap_or_else(|| {
         GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'world", Span::call_site())))
     });
-    let state_lt =
+    let state_lifetime =
         GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'state", Span::call_site())));
 
     let mut fetch_trait_punctuated_lifetimes = Punctuated::<_, Token![,]>::new();
-    fetch_trait_punctuated_lifetimes.push(world_lt.clone());
-    fetch_trait_punctuated_lifetimes.push(state_lt.clone());
+    fetch_trait_punctuated_lifetimes.push(world_lifetime.clone());
+    fetch_trait_punctuated_lifetimes.push(state_lifetime.clone());
 
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
@@ -453,9 +460,9 @@ fn fetch_impl_tokens(ast: &DeriveInput) -> FetchImplTokens {
         impl_generics,
         ty_generics,
         where_clause,
-        struct_has_world_lt,
-        world_lt,
-        state_lt,
+        struct_has_world_lifetime,
+        world_lifetime,
+        state_lifetime,
     }
 }
 
