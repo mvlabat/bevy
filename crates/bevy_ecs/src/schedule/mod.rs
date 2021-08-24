@@ -233,3 +233,26 @@ impl Stage for Schedule {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adding_after_boxed_stage() {
+        let mut schedule = Schedule::default();
+        schedule.add_stage("first", SystemStage::single_threaded());
+        let stage = schedule.iter_stages().next().unwrap().0.dyn_clone();
+        // shouldn't panic
+        schedule.add_stage_after(stage, "second", SystemStage::single_threaded());
+    }
+
+    #[test]
+    fn test_adding_before_boxed_stage() {
+        let mut schedule = Schedule::default();
+        schedule.add_stage("first", SystemStage::single_threaded());
+        let stage = schedule.iter_stages().next().unwrap().0.dyn_clone();
+        // shouldn't panic
+        schedule.add_stage_before(stage, "second", SystemStage::single_threaded());
+    }
+}
