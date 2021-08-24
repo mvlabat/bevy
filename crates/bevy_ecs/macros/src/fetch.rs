@@ -529,7 +529,7 @@ fn read_world_query_field_type_info(
                     // If it's a mutable reference, we set `query_type` and `fetch_init_type` to `&mut T`,
                     // we also update the lifetime for `fetch_init_type` to `'fetch`.
                     Type::Path(path) => {
-                        assert_not_generic(&path, generic_names);
+                        assert_not_generic(path, generic_names);
 
                         let segment = path.path.segments.last().unwrap();
                         let ty_ident = &segment.ident;
@@ -640,18 +640,12 @@ fn read_world_query_field_type_info(
                 }
                 is_phantom = true;
             } else if segment.ident != "Entity" {
-                assert_not_generic(&path, generic_names);
+                assert_not_generic(path, generic_names);
 
-                match &mut path_init.path.segments.last_mut().unwrap().arguments {
-                    PathArguments::AngleBracketed(args) => {
-                        match args.args.first_mut() {
-                            Some(GenericArgument::Lifetime(lt)) => {
-                                *lt = Lifetime::new("'fetch", Span::call_site());
-                            }
-                            _ => {},
-                        }
+                if let PathArguments::AngleBracketed(args) = &mut path_init.path.segments.last_mut().unwrap().arguments {
+                    if let Some(GenericArgument::Lifetime(lt)) = args.args.first_mut() {
+                        *lt = Lifetime::new("'fetch", Span::call_site());
                     }
-                    _ => {},
                 }
 
                 // If there's no `filter` attribute, we assume that it's a nested struct that implements `Fetch`.
@@ -709,13 +703,13 @@ fn read_world_query_field_type_info(
         _ => panic!("Only the following types (or their tuples) are supported for WorldQuery: &T, &mut T, Option<&T>, Option<&mut T>, Entity, or other structs that implement WorldQuery"),
     }
 
-    return WorldQueryFieldTypeInfo {
+    WorldQueryFieldTypeInfo {
         query_type,
         fetch_init_type,
         is_readonly,
         is_phantom,
         readonly_types_to_assert,
-    };
+    }
 }
 
 fn assert_not_generic(type_path: &TypePath, generic_names: &[String]) {
