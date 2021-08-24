@@ -10,7 +10,6 @@ use syn::{
 use crate::bevy_ecs_path;
 
 static READONLY_ATTRIBUTE_NAME: &str = "readonly";
-static FILTER_ATTRIBUTE_NAME: &str = "filter";
 
 pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -67,8 +66,6 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
     let mut phantom_field_idents = Vec::new();
     let mut phantom_field_types = Vec::new();
     let mut field_idents = Vec::new();
-    let mut filter_field_idents = Vec::new();
-    let mut non_filter_field_idents = Vec::new();
     let mut query_types = Vec::new();
     let mut fetch_init_types = Vec::new();
     let mut readonly_types_to_assert = Vec::new();
@@ -89,20 +86,6 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
                 .get_ident()
                 .map_or(false, |ident| ident == READONLY_ATTRIBUTE_NAME)
         });
-        let filter_type = field
-            .attrs
-            .iter()
-            .find(|attr| {
-                attr.path
-                    .get_ident()
-                    .map_or(false, |ident| ident == FILTER_ATTRIBUTE_NAME)
-            })
-            .map(|filter| {
-                filter
-                    .parse_args::<Type>()
-                    .expect("Expected a filter type (example: `#[filter(With<T>)]`)")
-            });
-        let is_filter = filter_type.is_some();
 
         let WorldQueryFieldTypeInfo {
             query_type,
@@ -113,7 +96,6 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
         } = read_world_query_field_type_info(
             &field.ty,
             false,
-            filter_type,
             has_readonly_attribute,
             &generic_names,
         );
@@ -122,14 +104,8 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
         if is_phantom {
             phantom_field_idents.push(field_ident.clone());
             phantom_field_types.push(field.ty.clone());
-        } else if is_filter {
-            field_idents.push(field_ident.clone());
-            filter_field_idents.push(field_ident.clone());
-            query_types.push(query_type);
-            fetch_init_types.push(init_type);
         } else {
             field_idents.push(field_ident.clone());
-            non_filter_field_idents.push(field_ident.clone());
             query_types.push(query_type);
             fetch_init_types.push(init_type);
         }
@@ -195,26 +171,20 @@ pub fn derive_fetch_impl(input: TokenStream) -> TokenStream {
                 #(self.#field_idents.set_table(&_state.#field_idents, _table);)*
             }
 
-            /// SAFETY: we call `table_fetch` for each member that implements `Fetch` or
-            /// `table_filter_fetch` if it also implements `FilterFetch`.
+            /// SAFETY: we call `table_fetch` for each member that implements `Fetch`.
             #[inline]
             unsafe fn table_fetch(&mut self, _table_row: usize) -> Self::Item {
-                use #path::query::FilterFetch;
                 #struct_name {
-                    #(#non_filter_field_idents: self.#non_filter_field_idents.table_fetch(_table_row),)*
-                    #(#filter_field_idents: self.#filter_field_idents.table_filter_fetch(_table_row),)*
+                    #(#field_idents: self.#field_idents.table_fetch(_table_row),)*
                     #(#phantom_field_idents: Default::default(),)*
                 }
             }
 
-            /// SAFETY: we call `archetype_fetch` for each member that implements `Fetch` or
-            /// `archetype_filter_fetch` if it also implements `FilterFetch`.
+            /// SAFETY: we call `archetype_fetch` for each member that implements `Fetch`.
             #[inline]
             unsafe fn archetype_fetch(&mut self, _archetype_index: usize) -> Self::Item {
-                use #path::query::FilterFetch;
                 #struct_name {
-                    #(#non_filter_field_idents: self.#non_filter_field_idents.archetype_fetch(_archetype_index),)*
-                    #(#filter_field_idents: self.#filter_field_idents.archetype_filter_fetch(_archetype_index),)*
+                    #(#field_idents: self.#field_idents.archetype_fetch(_archetype_index),)*
                     #(#phantom_field_idents: Default::default(),)*
                 }
             }
@@ -480,7 +450,6 @@ struct WorldQueryFieldTypeInfo {
 fn read_world_query_field_type_info(
     ty: &Type,
     is_tuple_element: bool,
-    filter_type: Option<Type>,
     has_readonly_attribute: bool,
     generic_names: &[String],
 ) -> WorldQueryFieldTypeInfo {
@@ -626,14 +595,6 @@ fn read_world_query_field_type_info(
                     mutability: Some(Token![mut](Span::call_site())),
                     elem: Box::new(mut_ty),
                 });
-            } else if segment.ident == "bool" {
-                if is_tuple_element {
-                    panic!("Invalid tuple element: bool");
-                }
-                fetch_init_type = filter_type.expect("Field type is `bool` but no `filter` attribute is found (example: `#[filter(With<T>)]`)");
-                query_type = fetch_init_type.clone();
-            } else if segment.ident == "With" || segment.ident == "Without" || segment.ident == "Or" || segment.ident == "Added" || segment.ident == "Changed" {
-                panic!("Invalid filter type: use `bool` field type and specify the filter with `#[filter({}<T>)]` attribute", segment.ident.to_string());
             } else if segment.ident == "PhantomData" {
                 if is_tuple_element {
                     panic!("Invalid tuple element: PhantomData");
@@ -642,24 +603,28 @@ fn read_world_query_field_type_info(
             } else if segment.ident != "Entity" {
                 assert_not_generic(path, generic_names);
 
+                // Here, we assume that this member is another type that implements `Fetch`.
+                // If it doesn't, the code won't compile.
+
+                // Also, we don't support `Fetch` implementations that specify custom `Item` types,
+                // except for the well-known ones, such as `WriteFetch`.
+                // See https://github.com/bevyengine/bevy/pull/2713#issuecomment-904773083.
+
                 if let PathArguments::AngleBracketed(args) = &mut path_init.path.segments.last_mut().unwrap().arguments {
                     if let Some(GenericArgument::Lifetime(lt)) = args.args.first_mut() {
                         *lt = Lifetime::new("'fetch", Span::call_site());
                     }
                 }
 
-                // If there's no `filter` attribute, we assume that it's a nested struct that implements `Fetch`.
-                if filter_type.is_none() {
-                    // If a user marks the field with the `readonly` attribute, we'll insert
-                    // a function call (no calls will happen in runtime), that will check that
-                    // the type implements `ReadOnlyFetch` indeed.
-                    // We can't allow ourselves to implement `ReadOnlyFetch` for the current struct
-                    // if we are not sure that all members implement it.
-                    if has_readonly_attribute {
-                        readonly_types_to_assert.push(path.clone());
-                    } else {
-                        is_readonly = false;
-                    }
+                // If a user marks the field with the `readonly` attribute, we'll insert
+                // a function call (no calls will happen in runtime), that will check that
+                // the type implements `ReadOnlyFetch` indeed.
+                // We can't allow ourselves to implement `ReadOnlyFetch` for the current struct
+                // if we are not sure that all members implement it.
+                if has_readonly_attribute {
+                    readonly_types_to_assert.push(path.clone());
+                } else {
+                    is_readonly = false;
                 }
             }
         }
@@ -683,7 +648,6 @@ fn read_world_query_field_type_info(
                 } = read_world_query_field_type_info(
                     ty,
                     true,
-                    None,
                     has_readonly_attribute,
                     generic_names,
                 );

@@ -103,30 +103,6 @@ pub trait WorldQuery {
 /// # my_system.system();
 /// ```
 ///
-/// ## Usage with filters
-///
-/// All filter members must be marked with `filter` attribute and have `bool` type.
-///
-/// **Note:** values of filter members will always be `true`, which means that the entities that
-/// don't meet filter requirements, won't be accessed. If you want to check, for instance, whether
-/// a component exists or not, use `Option<&T>` instead of filters.
-///
-/// ```
-/// # use bevy_ecs::prelude::*;
-/// use bevy_ecs::query::Fetch;
-///
-/// struct Foo;
-/// struct Bar;
-///
-/// #[derive(Fetch)]
-/// struct MyQuery<'w> {
-///     foo: &'w Foo,
-///     bar: Mut<'w, Bar>,
-///     #[filter(Changed<Foo>)]
-///     foo_is_changed: bool,
-/// }
-/// ```
-///
 /// ## Nested queries
 ///
 /// Using nested queries enable the composition pattern, which makes it possible to re-use other
@@ -209,6 +185,33 @@ pub trait WorldQuery {
 /// struct BarQuery<'w> {
 ///     bar: Mut<'w, Bar>,
 /// }
+/// ```
+///
+/// ## Limitations
+///
+/// Currently, we don't support members that have a manual [`WorldQuery`] implementation if their
+/// [`Fetch::Item`] is different from the member type. For instance, the following code won't
+/// compile:
+///
+/// ```ignore
+/// struct CustomQueryParameter;
+/// struct ItemDataType;
+///
+/// struct CustomQueryParameterFetch {
+///   // ...
+/// }
+///
+/// impl<'w, 's> Fetch<'w, 's> for CustomQueryParameterFetch {
+///   type Item = ItemDataType;
+///
+///   // ...
+/// }
+///
+/// #[derive(Fetch)]
+/// struct MyQuery {
+///   custom_item: ItemDataType,
+/// }
+///
 /// ```
 pub trait Fetch<'world, 'state>: Sized {
     type Item;

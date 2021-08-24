@@ -56,8 +56,6 @@ struct MutQuery<'w, T: Component + Debug, P: Component + Debug> {
     b: Option<Mut<'w, ComponentB>>,
     nested: NestedQuery<'w>,
     generic: GenericQuery<'w, T, P>,
-    #[filter(QueryFilter<T, P>)]
-    filter: bool,
 }
 
 // If you want to declare a read-only query that uses nested `Fetch` structs, you need to
@@ -72,8 +70,6 @@ struct ReadOnlyNumQuery<'w, T: Component, P: Component> {
     nested: NestedQuery<'w>,
     #[readonly]
     generic: GenericQuery<'w, T, P>,
-    #[filter(QueryFilter<T, P>)]
-    filter: bool,
 }
 
 #[derive(Fetch, Debug)]
@@ -115,7 +111,6 @@ fn print_components(
         println!("B: {:?}", e.b);
         println!("Nested: {:?}", e.nested);
         println!("Generic: {:?}", e.generic);
-        println!("Filter: {:?}", e.filter);
     }
     println!();
 }
@@ -130,7 +125,6 @@ fn print_components_readonly(
         println!("B: {:?}", e.b);
         println!("Nested: {:?}", e.nested);
         println!("Generic: {:?}", e.generic);
-        println!("Filter: {:?}", e.filter);
     }
     println!();
 }
