@@ -12,12 +12,12 @@ use std::{fmt::Debug, marker::PhantomData};
 ///
 /// White regular tuple queries work great in most of simple scenarios, using custom queries
 /// declared as named structs can bring the following advantages:
-/// - They help to avoid destructuring or using `q.0, q.1, ...` access pattern
+/// - They help to avoid destructuring or using `q.0, q.1, ...` access pattern.
 /// - Adding, removing components or changing items order with structs greatly reduces maintenance
 ///   burden, as you don't need to update statements that destructure tuples, care abort order
-///   of elements, etc. Instead, you can just add or remove places where a certain element is used
-/// - Named structs enable the composition pattern, that makes query types easier to re-use
-/// - They allow to go over the limit of 15 components that exists for query tuples
+///   of elements, etc. Instead, you can just add or remove places where a certain element is used.
+/// - Named structs enable the composition pattern, that makes query types easier to re-use.
+/// - You can bypass the limit of 15 components that exists for query tuples.
 ///
 /// For more details on the `Fetch` and `FilterFetch` derive macros, see their documentation.
 fn main() {
@@ -52,6 +52,7 @@ struct ComponentZ;
 #[derive(Fetch)]
 struct MutQuery<'w, T: Component + Debug, P: Component + Debug> {
     entity: Entity,
+    // `Mut<'w, T>` is a necessary replacement for `&'w mut T`
     a: Mut<'w, ComponentA>,
     b: Option<Mut<'w, ComponentB>>,
     nested: NestedQuery<'w>,

@@ -18,8 +18,9 @@ use std::{cell::UnsafeCell, marker::PhantomData, ptr};
 /// Using [`derive@super::FilterFetch`] macro allows creating custom query filters.
 /// You may want to implement a custom query filter for the following reasons:
 /// - Nested query filters enable the composition pattern and makes them easier to re-use.
-/// - It allows to go over the limit of 15 components that exists for query filters declared as
-///   tuples.
+/// - You can bypass the limit of 15 components that exists for query filters declared as tuples.
+///
+/// Implementing the trait manually can allow for a fundamentally new type of behaviour.
 ///
 /// ## Derive
 ///

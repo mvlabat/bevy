@@ -59,11 +59,13 @@ pub trait WorldQuery {
 /// those associated types.
 ///
 /// You may want to implement a custom query for the following reasons:
-/// - Named structs can be easier to use than complex query tuples. Access via struct fields
-///   is more convenient than destructuring tuples or accessing them via `q.0, q.1, ...` pattern
-///   and saves a lot of maintenance burden when adding or removing components.
+/// - Named structs can be clearer and easier to use than complex query tuples. Access via struct
+///   fields is more convenient than destructuring tuples or accessing them via `q.0, q.1, ...`
+///   pattern and saves a lot of maintenance burden when adding or removing components.
 /// - Nested queries enable the composition pattern and makes query types easier to re-use.
-/// - It allows to go over the limit of 15 components that exists for query tuples.
+/// - You can bypass the limit of 15 components that exists for query tuples.
+///
+/// Implementing the trait manually can allow for a fundamentally new type of behaviour.
 ///
 /// # Derive
 ///
@@ -89,6 +91,7 @@ pub trait WorldQuery {
 /// struct MyQuery<'w> {
 ///     entity: Entity,
 ///     foo: &'w Foo,
+///     // `Mut<'w, T>` is a necessary replacement for `&'w mut T`
 ///     bar: Mut<'w, Bar>,
 ///     optional_foo: Option<&'w OptionalFoo>,
 ///     optional_bar: Option<Mut<'w, OptionalBar>>,
