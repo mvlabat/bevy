@@ -314,6 +314,10 @@ path = "examples/ecs/system_sets.rs"
 name = "timers"
 path = "examples/ecs/timers.rs"
 
+[[example]]
+name = "query_views"
+path = "examples/ecs/query_views.rs"
+
 # Games
 [[example]]
 name = "alien_cake_addict"

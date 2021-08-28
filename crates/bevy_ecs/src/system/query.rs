@@ -160,7 +160,7 @@ where
 
     /// Returns an [`Iterator`] over the query results.
     #[inline]
-    pub fn iter_mut(&mut self) -> QueryIter<'_, '_, Q, F> {
+    pub fn iter_mut(&mut self) -> QueryIter<'_, 's, Q, F> {
         // SAFE: system runs without conflicts with other systems.
         // same-system queries have runtime borrow checks when they conflict
         unsafe {
@@ -581,4 +581,55 @@ pub enum QuerySingleError {
     NoEntities(&'static str),
     #[error("Multiple entities fit the query {0}!")]
     MultipleEntities(&'static str),
+}
+
+impl<'q, 'w, 's, Q: WorldQuery, F: WorldQuery> QueryableMut<'q> for Query<'w, 's, Q, F>
+    where
+        Q::Fetch: ReadOnlyFetch,
+        F::Fetch: FilterFetch,
+{
+    type Item = <<Q as WorldQuery>::Fetch as Fetch<'q, 's>>::Item;
+
+    fn iter_mut(&'q mut self) -> Box<dyn Iterator<Item=Self::Item> + 'q> {
+        Box::new(Self::iter_mut(self))
+    }
+}
+
+pub trait QueryableMut<'q>
+    where Self: Sized
+{
+    type Item;
+
+    fn iter_mut(&'q mut self) -> Box<dyn Iterator<Item=Self::Item> + 'q>;
+
+    fn map<F, B>(&'q mut self, f: F) -> View<'q, Self, F> where
+        F: FnMut(Self::Item) -> B,
+    {
+        View {
+            queryable: self,
+            f,
+        }
+    }
+}
+
+pub struct View<'q, Q, IterF>
+    where
+        Q: QueryableMut<'q>,
+{
+    pub(crate) queryable: &'q mut Q,
+    pub(crate) f: IterF,
+}
+
+impl<'q, Q, IItem: 'q, IterF, B> QueryableMut<'q> for View<'q, Q, IterF>
+    where
+        Q: QueryableMut<'q, Item=IItem>,
+        IterF: FnMut(IItem) -> B,
+{
+    type Item = B;
+
+    #[inline]
+    fn iter_mut(&'q mut self) -> Box<dyn Iterator<Item=B> + 'q>
+    {
+        Box::new(self.queryable.iter_mut().map(&mut self.f))
+    }
 }
