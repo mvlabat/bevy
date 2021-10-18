@@ -13,7 +13,7 @@ license = "MIT"
 keywords = ["bevy"]
 
 [dependencies]
-ahash = "0.5.3"
+ahash = "0.7.6"
 tracing = {version = "0.1", features = ["release_max_level_info"]}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
