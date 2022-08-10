@@ -1210,6 +1210,10 @@ wasm = true
 name = "animate_shader"
 path = "examples/shader/animate_shader.rs"
 
+[[example]]
+name = "time_animated_material"
+path = "examples/shader/time_animated_material.rs"
+
 [package.metadata.example.animate_shader]
 name = "Animated"
 description = "A shader that uses dynamic data like the time since startup"
